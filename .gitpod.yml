@@ -1,0 +1,26 @@
+tasks:
+  - name: Hardhat Node
+    init: npm install
+    command: npx hardhat node
+  - name: Deploy Contract and Start Server
+    command: | 
+      export CLIENT_URL="$(gp url 8545)"
+      gp await-port 8545
+      cp -rf env.example .env
+      node scripts/set-network.js
+      npx hardhat run scripts/deploy.js --network localhost
+      npx run dev
+    openMode: tab-after 
+
+# List the ports to expose. Learn more https://www.gitpod.io/docs/config-ports/
+ports:
+  - port: 3000
+    onOpen: open-browser
+    
+  - port: 8545 #hardhat node
+    onOpen: open-preview
+    visibility: public
+
+vscode:
+  extensions:
+    - juanblanco.solidity

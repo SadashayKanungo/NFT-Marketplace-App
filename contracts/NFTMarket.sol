@@ -1,0 +1,473 @@
+// SPDX-License-Identifier: UNLICENSED
+
+pragma solidity ^0.8.3;
+
+import "./NFT.sol";
+import "./TOKENX.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+/// @title MarketPlace Contract that regulates NFT contract/token
+/// @notice This Contract is used to set NFT tokens to Aution and Sale
+/// @dev Uses safeMath library for all calulations and holds crypto/tokens uring auction
+contract NFTMarket is Ownable {
+    using SafeMath for uint256;
+
+    event SaleCreated(uint256 indexed tokenId, uint256 sellingPrice);
+    event AuctionCreated(uint256 indexed tokenId, uint256 startingPrice);
+    event BidCreated(
+        uint256 indexed tokenId,
+        address indexed bidder,
+        uint256 bidAmount
+    );
+    event AuctionCancelled(uint256 indexed tokenId);
+    event SellCancelled(uint256 indexed tokenId);
+
+    NFT nftContract; //contract address for NFT
+    address payable public marketPlaceOwner; //address of marketPlace owner, gets commissions on each sales
+    uint256 public minimunBidPer10000; // minimum bid amount to be set
+
+    //Token Contract 
+    TOKENX tradeToken;
+
+    //Auction details
+    struct Auction {
+        address seller;
+        uint256 startingPrice;
+        uint256 expiresAt; //auction expiry date.
+        uint256 currentBidPrice; //Current max bidding price
+        address currentBidder; //Current max bidder
+        bool onAuction;
+        //bool royaltySupport; //royalty support 
+    }
+
+    //Sale Details
+    struct Sale {
+        address seller;
+        uint256 sellingPrice;
+        bool onSale;
+        //bool royaltySupport; //royalty support 
+    }
+
+    mapping(uint256 => Sale) public TokenSales; //tokenIdToSell
+    mapping(uint256 => Auction) public TokenAuctions; // tokenIdToAuction
+    uint256[] public saleTokenIds; //Sales token for sales
+    uint256[] public auctionTokenIds; //Auction token for sales
+
+    ///@param _nftContract Contract Address of NFT
+    ///@dev sets deployer as marketplace owner and init minimum bid percent to 2.5%
+    constructor(address _nftContract, address _token) {
+        nftContract = NFT(_nftContract); //nftContract could be deployed from here
+        tradeToken = TOKENX(payable(_token));
+        marketPlaceOwner = payable (msg.sender);
+        minimunBidPer10000 = 250; // 2.5% minimunBid at initial
+    }
+
+    ///@notice check if caller is tokenOwner of given tokenID
+    ///@param _tokenId tokenId of NFT
+    modifier IsTokenOwner(uint256 _tokenId) {
+        require(
+            nftContract.ownerOf(_tokenId) == msg.sender,
+            "MarketPlace: Caller is not the owner of this token"
+        );
+        _;
+    }
+
+
+    ///@dev checks if amount is greater that 10000
+    modifier checkPrice(uint256 _amount) {
+        require(
+            _amount > 10000,
+            "MarketPlace: Amount should be minimum 10000 wei"
+        );
+        _;
+    }
+
+    ///@dev sets given account as marketplace owner
+    ///@param _account address of marketplace owner to  be set
+    function setMarketPlaceOwner(address _account) public onlyOwner{
+        marketPlaceOwner = payable(_account);
+    }
+
+
+    ///@notice set NFT to sale
+    ///@dev allows token owner to palce their token to sale
+    ///@param _tokenId TokenId of NFT
+    ///@param _sellingPrice selling price of token
+    /// _royaltySupport royalty support 
+    function setNftToSell(uint256 _tokenId, uint256 _sellingPrice /*, bool _royaltySupport*/)
+        public
+        IsTokenOwner(_tokenId)
+        checkPrice(_sellingPrice)
+    {
+        require(
+            nftContract.isApprovedForAll(msg.sender, address(this)),
+            "MarketPlace: Minter need to approve marketplace as its token operator"
+        );
+        require(
+            TokenSales[_tokenId].onSale == false,
+            "MarketPlace: Token already on Sale"
+        );
+        require(
+            TokenAuctions[_tokenId].onAuction == false,
+            "MarketPlace: Token already set for Auction"
+        );
+        require(
+            nftContract.isApprovedForAll(msg.sender, address(this)),
+            "MarketPlace: Minter need to approve marketplace as its token operator"
+        );
+
+        TokenSales[_tokenId] = Sale({
+            seller: msg.sender,
+            sellingPrice: _sellingPrice,
+            onSale: true 
+            //royaltySupport: _royaltySupport
+        });
+        //set nft id for sale
+        saleTokenIds.push(_tokenId);
+
+        emit SaleCreated(_tokenId, _sellingPrice);
+    }
+
+    ///@notice Set NFT for Auction
+    ///@dev allows token owner to place their token to Auction
+    ///@param _tokenId TokenId of NFT
+    ///@param _startingPrice starting price of token
+    ///@param _expiresIn Expiry timestamp of auction
+    /// _royaltySupport royalty support for Auction
+    function setNftToAuction(
+        uint256 _tokenId,
+        uint256 _startingPrice,
+        uint256 _expiresIn
+        //bool _royaltySupport
+    ) public IsTokenOwner(_tokenId) checkPrice(_startingPrice) {
+        uint256 _expiresAt = block.timestamp + _expiresIn;
+        require(
+            nftContract.isApprovedForAll(msg.sender, address(this)),
+            "MarketPlace: Minter need to approve marketplace as its token operator"
+        );
+        require(
+            _expiresAt > block.timestamp,
+            "MarketPlace: Invalid token Expiry date"
+        );
+
+        require(
+            TokenSales[_tokenId].onSale == false,
+            "MarketPlace: Token already set for Sale"
+        );
+        require(
+            TokenAuctions[_tokenId].onAuction == false,
+            "MarketPlace: Token already on Auction"
+        );
+        require(
+            nftContract.isApprovedForAll(msg.sender, address(this)),
+            "MarketPlace: Minter need to approve marketplace as its token operator"
+        );
+
+        TokenAuctions[_tokenId] = Auction({
+            seller: msg.sender,
+            startingPrice: _startingPrice,
+            expiresAt: _expiresAt,
+            currentBidPrice: 0,
+            currentBidder: address(0),
+            onAuction: true
+            //royaltySupport: _royaltySupport
+        });
+        //set nft to auction
+        auctionTokenIds.push(_tokenId);
+
+        emit AuctionCreated(_tokenId, _startingPrice);
+    }
+
+    ///@notice bid an amount to given tokenId
+    ///@dev holds bid amount of the bidder and set it as current bidder if bid amount is higher than previous bidder
+    ///@param _tokenId TokenId of NFT
+    ///@param _tokenAmount Total token to auction for
+    function bidForAuction(uint256 _tokenId, uint256 _tokenAmount) public {
+        Auction storage act = TokenAuctions[_tokenId];
+        require(
+            act.onAuction == true && act.expiresAt > block.timestamp,
+            "MarketPlace: Token expired from auction"
+        );
+
+        require(
+            _tokenAmount >= act.startingPrice,
+            "MarketPlace: Bid amount is lower than startingPrice"
+        );
+        if (act.currentBidPrice != 0) {
+            require(
+                _tokenAmount >=
+                    (act.currentBidPrice +
+                        cutPer10000(minimunBidPer10000, act.currentBidPrice)),
+                "MarketPlace: Bid Amount is less than minimunBid required"
+            );
+        }
+
+        address currentBidder = act.currentBidder;
+        uint256 prevBidPrice = act.currentBidPrice;
+        act.currentBidPrice = 0;
+        //add the current bid amount 
+        tradeToken.transferFrom(msg.sender, address(this), _tokenAmount);
+        //return the previous tokens to the bidder
+
+        if(currentBidder != address(0))
+            tradeToken.transfer(currentBidder, prevBidPrice);
+            
+        //update
+        act.currentBidPrice = _tokenAmount;
+        act.currentBidder = msg.sender;
+
+        emit BidCreated(_tokenId, msg.sender, _tokenAmount);
+    }
+
+    ///@notice cancel ongoing auction
+    ///@dev stops the ongoing auction and if bidder exists refund the bidders amount
+    ///@param _tokenId TokenId of NFT
+    function cancelAuction(uint256 _tokenId)
+        public
+        IsTokenOwner(_tokenId)
+    {
+        Auction storage act = TokenAuctions[_tokenId];
+
+        act.onAuction = false;
+        if (act.currentBidder != address(0)) {
+            address currentBidder = act.currentBidder;
+            uint256 bidPrice = act.currentBidPrice;
+            act.currentBidPrice = 0;
+
+            tradeToken.transfer(currentBidder, bidPrice);
+        }
+
+        //remove the item from the auction
+        removeNftIdFromAuction(_tokenId);
+
+        emit AuctionCancelled(_tokenId);
+    }
+
+    ///@notice cancel ongoing sale
+    ///@dev stops the ongoing sale
+    ///@param _tokenId TokenId of NFT
+    function cancelSell(uint256 _tokenId) public IsTokenOwner(_tokenId) {
+        Sale storage sale = TokenSales[_tokenId];
+
+        sale.onSale = false;
+        sale.sellingPrice = 0;
+
+        //remove the item from sale
+        removeNftIdFromSale(_tokenId);
+
+        emit SellCancelled(_tokenId);
+    }
+
+    ///@notice claim the NFT once the bidder wins an auction
+    ///@dev tranfer nft token to highest bidder and divide the commission to token minter and marketplace owner
+    ///@param _tokenId TokenId of NFT
+    function claimNft(uint256 _tokenId) public {
+        Auction storage act = TokenAuctions[_tokenId];
+        require(
+            msg.sender == act.currentBidder,
+            "MarketPlace: Caller is not a highest bidder"
+        );
+        require(
+            act.expiresAt < block.timestamp,
+            "MarketPlace: Token still on auction"
+        );
+
+        address  tokenOwner = act.seller;
+        address  minter = nftContract.getOriginalMinter(_tokenId);
+        uint256 royaltyPercentage = nftContract.getRoyaltyPercentage(_tokenId);
+
+        act.onAuction = false;
+        (
+            uint256 _minterCommision,
+            uint256 _marketPlaceCommission,
+            uint256 _remainings
+        ) = calculateCommissions(act.currentBidPrice, royaltyPercentage); // calculate commissions
+        //transfer commissions
+        act.currentBidPrice = 0;
+        nftContract.transferFrom(tokenOwner, msg.sender, _tokenId);
+        
+        //transfer marketplace commision 
+        tradeToken.transfer(marketPlaceOwner, _marketPlaceCommission);
+        //transfer remainings to token owner
+        tradeToken.transfer(tokenOwner, _remainings);
+        if(_minterCommision > 0){
+            //transfer minter comission
+            tradeToken.transfer(minter, _minterCommision);
+        }
+
+        // if(act.royaltySupport){
+        //     //transfer minter comission
+        //     tradeToken.transfer(minter, _minterCommision);
+        // }else{
+        //     //transfer minter commision to token owner
+        //     tradeToken.transfer(tokenOwner, _minterCommision);
+        // }
+
+        //remove the item from auction
+        removeNftIdFromAuction(_tokenId);
+    }
+
+    ///@notice buy the nft placed on sale
+    ///@dev tranfer nft token to buyer and divide the commission to token minter and marketplace owner
+    ///@param _tokenId TokenId of NFT
+    ///@param _tokenAmount Token Amount with which you buy nft
+    function buyNft(uint256 _tokenId, uint256 _tokenAmount) public {
+        Sale storage sale = TokenSales[_tokenId];
+        require(sale.onSale, "MarketPlace: Token is not on Sale");
+        require(
+            _tokenAmount == sale.sellingPrice,
+            "MarketPlace: Not Enough value to buy token"
+        );
+        
+        address  tokenOwner = nftContract.ownerOf(_tokenId);
+        address minter = nftContract.getOriginalMinter(_tokenId);
+        uint256 royaltyPercentage = nftContract.getRoyaltyPercentage(_tokenId);
+
+        sale.onSale = false;
+        (
+            uint256 _minterCommision,
+            uint256 _marketPlaceCommission,
+            uint256 _remainings
+        ) = calculateCommissions(sale.sellingPrice, royaltyPercentage); // calculate commissions
+        sale.sellingPrice = 0;
+        nftContract.transferFrom(tokenOwner, msg.sender, _tokenId);
+        
+        //transfer marketplace owner commissions
+        tradeToken.transferFrom(msg.sender, marketPlaceOwner, _marketPlaceCommission);
+        //transfer remainings to token owner
+        tradeToken.transferFrom(msg.sender, tokenOwner, _remainings);
+        if(_minterCommision > 0){
+            //transfer minterCommision to minter
+            tradeToken.transferFrom(msg.sender, minter, _minterCommision);
+        }
+        
+        
+        // if(sale.royaltySupport){
+        //     //transfer minter commission
+        //     tradeToken.transferFrom(msg.sender, minter, _minterCommision);
+        // }else{
+        //     //transfer the commision to token seller
+        //     tradeToken.transferFrom(msg.sender, tokenOwner, _minterCommision);
+        // }
+
+        //remove item from sale
+        removeNftIdFromSale(_tokenId);
+    }
+
+    ///@notice change the minimum bid percent
+    ///@param _minBidPer10000 minimun bid amount per 10000
+    function setMinimumBidPercent(uint256 _minBidPer10000) public onlyOwner {
+        require(
+            _minBidPer10000 < 10000,
+            "MarketPlace: minimun Bid cannot be more that 100%"
+        );
+        minimunBidPer10000 = _minBidPer10000;
+    }
+
+    function removeNftIdFromSale(uint256 _tokenId) internal{
+        for(uint256 i=0; i<saleTokenIds.length; i++){
+            if(saleTokenIds[i] ==_tokenId){
+                saleTokenIds[i] = saleTokenIds[saleTokenIds.length-1];
+                saleTokenIds.pop();
+                return;
+            }
+            
+        }
+    }
+
+    function removeNftIdFromAuction(uint256 _tokenId) internal{
+        for(uint256 i=0; i<auctionTokenIds.length; i++){
+            if(auctionTokenIds[i] ==_tokenId){
+                auctionTokenIds[i] = auctionTokenIds[auctionTokenIds.length-1];
+                auctionTokenIds.pop();
+                return;
+            }
+        }
+    }
+
+    ///@notice calculates the required commissions
+    ///@dev deducts the minter and marketplace commission and returns the result
+    ///@param _amount total amount from which commission is to be deducted
+    ///@return _minterCommision commision given to minter
+    ///@return _marketPlaceCommission commission given to marketplace owner
+    ///@return _remainings after deducting commission
+    function calculateCommissions(uint256 _amount, uint256 _royaltyPercentage)
+        internal
+        pure
+        returns (
+            uint256 _minterCommision,
+            uint256 _marketPlaceCommission,
+            uint256 _remainings
+        )
+    {
+        uint256 minterCommision = cutPer10000(_royaltyPercentage * 100, _amount); //10% of total
+        uint256 marketPlaceCommission = cutPer10000(250, _amount); //2.5% of total
+        return (
+            minterCommision,
+            marketPlaceCommission,
+            _amount.sub(minterCommision).sub(marketPlaceCommission)
+        );
+    }
+
+    ///@notice calculate percent amount for given percent and total
+    ///@dev calculates the cut per 10000 fo the given total
+    ///@param _cut cut to be caculated per 10000, i.e percentAmount * 100
+    ///@param _total total amount from which cut is to be calculated
+    function cutPer10000(uint256 _cut, uint256 _total)
+        internal
+        pure
+        returns (uint256)
+    {
+        uint256 cutAmount = _total.mul(_cut).div(10000);
+        return cutAmount;
+    }
+
+    //fetchers
+    // sales
+    function fetchSalesItems() public view returns (Sale[] memory){
+        Sale[] memory sales = new Sale[](saleTokenIds.length);
+        for(uint256 i=0;i<saleTokenIds.length;i++){
+            Sale storage sale = TokenSales[saleTokenIds[i]];
+            sales[i] = sale;
+        }
+        return sales;
+    }
+
+    function fetchMySalesItems() public view returns (Sale[] memory){
+        Sale[] memory sales = new Sale[](saleTokenIds.length);
+        uint256 saleCounter = 0;
+        for(uint256 i=0;i<saleTokenIds.length;i++){
+            Sale storage sale = TokenSales[saleTokenIds[i]];
+            if(sale.seller == msg.sender){
+                sales[saleCounter] = sale;
+                saleCounter += 1;
+            }
+        }
+        return sales;
+    }
+
+
+    //auctions
+    function fetchAuctionsItems() public view returns(Auction[] memory){
+        Auction[] memory auctions = new Auction[](auctionTokenIds.length);
+        for(uint256 i=0;i<auctionTokenIds.length;i++){
+            Auction storage auction = TokenAuctions[auctionTokenIds[i]];
+            auctions[i]=auction;
+        }
+        return auctions;
+    }
+
+    function fetchMyAuctionsItems() public view returns(Auction[]  memory){
+        Auction[] memory auctions = new Auction[](auctionTokenIds.length);
+        uint256 auctionCounter = 0;
+        for(uint256 i=0;i<auctionTokenIds.length;i++){
+            Auction memory auction = TokenAuctions[auctionTokenIds[i]];
+            if(auction.seller == msg.sender){
+                auctions[auctionCounter]=auction;
+                auctionCounter += 1;
+            }
+        }
+        return auctions;
+    }
+}

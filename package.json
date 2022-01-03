@@ -1,0 +1,49 @@
+{
+  "name": "nft-marketplace",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "predeploy:mainnet": "node deploy.js deploy:mainnet",
+    "deploy:mainnet": "RPC_URL=https://rpc-mainnet.matic.network/ npx hardhat run scripts/deploy.js --network mainnet",
+    "predeploy:mumbai": "node deploy.js deploy:mumbai",
+    "deploy:mumbai": "RPC_URL=https://rpc-mumbai.matic.today/ npx hardhat run scripts/deploy.js --network mumbai",
+    "deploy:nft": "npx hardhat run scripts/deploy.js --network localhost",
+    "deploy": "npx hardhat run scripts/deploy.js --network localhost"
+  },
+  "dependencies": {
+    "@nomiclabs/hardhat-ethers": "^2.0.2",
+    "@nomiclabs/hardhat-waffle": "^2.0.1",
+    "@openzeppelin/contracts": "^4.3.2",
+    "@walletconnect/web3-provider": "^1.7.0",
+    "axios": "^0.24.0",
+    "chai": "^4.3.4",
+    "ethereum-waffle": "^3.4.0",
+    "ethers": "^5.5.1",
+    "fortmatic": "^2.2.1",
+    "hardhat": "^2.6.7",
+    "ipfs-http-client": "^53.0.1",
+    "next": "12.0.2",
+    "react": "17.0.2",
+    "react-dom": "17.0.2",
+    "rsuite": "^5.2.1",
+    "walletlink": "^2.3.0",
+    "web3modal": "^1.9.4"
+  },
+  "devDependencies": {
+    "@uniswap/v2-periphery": "^1.1.0-beta.0",
+    "autoprefixer": "^10.4.0",
+    "css-loader": "^6.5.1",
+    "dotenv": "^10.0.0",
+    "eslint": "7.32.0",
+    "eslint-config-next": "12.0.2",
+    "less": "^4.1.2",
+    "less-loader": "^10.2.0",
+    "mini-css-extract-plugin": "^2.4.4",
+    "postcss": "^8.3.11",
+    "tailwindcss": "^2.2.19",
+    "webpack": "^5.64.0"
+  }
+}
