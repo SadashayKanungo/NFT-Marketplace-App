@@ -317,9 +317,13 @@ contract NFTMarket is Ownable {
             uint256 _remainings
         ) = calculateCommissions(act.currentBidPrice, royaltyPercentage); // calculate commissions
         //transfer commissions
-        act.currentBidPrice = 0;
-        nftContract.transferFrom(tokenOwner, msg.sender, _tokenId);
         
+        nftContract.transferFrom(tokenOwner, msg.sender, _tokenId);
+
+        // adding new owner to nft's history
+        nftContract.addOwner(_tokenId, msg.sender, act.currentBidPrice);
+
+        act.currentBidPrice = 0;
         //transfer marketplace commision 
         tradeToken.transfer(marketPlaceOwner, _marketPlaceCommission);
         //transfer remainings to token owner
@@ -363,9 +367,13 @@ contract NFTMarket is Ownable {
             uint256 _marketPlaceCommission,
             uint256 _remainings
         ) = calculateCommissions(sale.sellingPrice, royaltyPercentage); // calculate commissions
-        sale.sellingPrice = 0;
-        nftContract.transferFrom(tokenOwner, msg.sender, _tokenId);
         
+        nftContract.transferFrom(tokenOwner, msg.sender, _tokenId);
+
+        // adding new owner to nft's history
+        nftContract.addOwner(_tokenId, msg.sender, sale.sellingPrice);
+        
+        sale.sellingPrice = 0;
         //transfer marketplace owner commissions
         tradeToken.transferFrom(msg.sender, marketPlaceOwner, _marketPlaceCommission);
         //transfer remainings to token owner
@@ -490,9 +498,9 @@ contract NFTMarket is Ownable {
 
     function fetchMyAuctionsItems() public view returns(Auction[]  memory){
         uint256 myNos = 0;
-        for(uint256 i=0;i<saleItems.length;i++){
-            Sale memory sale = saleItems[i];
-            if(sale.seller == msg.sender){
+        for(uint256 i=0;i<auctionItems.length;i++){
+            Auction memory auction = auctionItems[i];
+            if(auction.seller == msg.sender){
                 myNos++;
             }
         }

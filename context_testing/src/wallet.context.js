@@ -21,7 +21,7 @@ export async function getProvider() {
 }
 
 const parseItem = async (i) => {
-  console.log("parsing", i);
+  //console.log("parsing", i);
   const [tokenId, tokenUri, seller, sellingPrice, forSale] = i
   //const meta = await axios.get(tokenUri)
   let item = {
@@ -34,10 +34,20 @@ const parseItem = async (i) => {
   }
   return item
 }
+const parseHistory = async (i) => {
+  console.log("parsing", i);
+  const [owner,value] = i
+  //const meta = await axios.get(tokenUri)
+  let item = {
+    owner,
+    value : ethers.utils.formatEther(value._hex.toString()),
+  }
+  return item
+}
 
 export const marketplace = {
-  loadMyNFTs: async function (provider) {
-    const marketContract = new ethers.Contract(nftmarketaddress, MarketAbi, provider)
+  loadMyNFTs: async function (signer) {
+    const marketContract = new ethers.Contract(nftmarketaddress, MarketAbi, signer)
     
     const SaleData = await marketContract.fetchMySalesItems()
     const SaleItems = await Promise.all(SaleData.map(async i => {const parsed = await parseItem(i); return parsed;}))
@@ -46,7 +56,6 @@ export const marketplace = {
     const AuctionItems = await Promise.all(AuctionData.map(async i => {const parsed = await parseItem(i); return parsed;}))
 
     const items = SaleItems.concat(AuctionItems)
-    console.log("fetched", items);
     return items;
   },
 
@@ -66,19 +75,29 @@ export const marketplace = {
 
   createSale : async function (signer, nftId, nftPrice) {
     const marketContract = new ethers.Contract(nftmarketaddress, MarketAbi, signer)
-    //const tokenContract = new ethers.Contract(nftaddress, NFTAbi, provider)
-    const data = await marketContract.setNftForSell(nftId, nftPrice, {from : signer.getAddress()})
+    const data = await marketContract.setNftToSell(nftId, ethers.utils.parseEther(nftPrice.toString()))
     console.log(data);
   },
 
   createAuction : async function (signer, nftId, auctionStartPrice, auctionExpiryTime) {
     const marketContract = new ethers.Contract(nftmarketaddress, MarketAbi, signer)
-    //const tokenContract = new ethers.Contract(nftaddress, NFTAbi, provider)
-    const data = await marketContract.setNftForAuction(nftId, auctionStartPrice, auctionExpiryTime, {from : signer.getAddress()})
+    const data = await marketContract.setNftToAuction(nftId, ethers.utils.parseEther(auctionStartPrice.toString()), auctionExpiryTime, {from : signer.getAddress()})
     console.log(data);
-  }
+  },
 
+  mintNFT : async function (signer, tokenUri, metadataUri, royaltyPercent) {
+    const nftContract = new ethers.Contract(nftaddress, NFTAbi, signer)
+    const ownerAddress = await signer.getAddress()
+    const data = await nftContract.mintItem(ownerAddress, tokenUri, metadataUri, royaltyPercent)
+    console.log(data);
+  },
+
+  loadHistory : async function (provider, tokenId) {
+    const nftContract = new ethers.Contract(nftaddress, NFTAbi, provider)
+    const data = await nftContract.getHistory(tokenId)
+    const history = await Promise.all(data.map(async i => {const parsed = await parseHistory(i); return parsed;}))
+    return history;
+  }
   // getMyNfts - Loop on getByTokenID
-  // NFTHistory - Not storing history
   // AuctionBids - Not storing all bids, only highest
 }

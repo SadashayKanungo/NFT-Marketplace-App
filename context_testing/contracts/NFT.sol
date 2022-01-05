@@ -11,6 +11,12 @@ contract NFT is ERC721URIStorage {
     Counters.Counter private _tokenIds; // tracks the token ids
     event TokenMinted(address owner, uint256 tokenId);
 
+    // Stores Ownership history Data
+    struct HistoryItem{
+        address owner;
+        uint256 value;
+    }
+
     /// Stores token Meta Data
     struct TokenExtraInfo {
         address minter;
@@ -22,6 +28,8 @@ contract NFT is ERC721URIStorage {
     mapping(uint256 => TokenExtraInfo) public TokenExtraInfos;
     //  mapping for token URIs
     mapping(uint256 => string) private _tokenURIs;
+    // mapping for Ownership history
+    mapping(uint256 => HistoryItem[]) public TokenHistory;
 
 
     constructor() ERC721("GameItem", "ITM") {}
@@ -59,6 +67,19 @@ contract NFT is ERC721URIStorage {
         return newItemId;
     }
 
+
+    function addOwner( uint256 _tokenId, address _owner, uint256 _value) public returns (HistoryItem[] memory) {
+        HistoryItem memory newOwner = HistoryItem({
+            owner: _owner,
+            value: _value
+        });
+        TokenHistory[_tokenId].push(newOwner);
+        return TokenHistory[_tokenId];
+    }
+
+    function getHistory(uint256 _tokenId) public view returns (HistoryItem[] memory) {
+        return TokenHistory[_tokenId];
+    }
 
     ///@notice gives the original minter of token
     ///@param _tokenId Id of token

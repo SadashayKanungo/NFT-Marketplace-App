@@ -23,7 +23,7 @@ function App() {
 }, [])
 
 const testFetchMyNfts = async () => {
-  const nfts = await marketplace.loadMyNFTs(provider)
+  const nfts = await marketplace.loadMyNFTs(signer)
   console.log(nfts)
 }
 
@@ -32,6 +32,25 @@ const testFetchAllNfts = async () => {
   console.log(nfts)
 }
 
+const testMintNFT = async () => {
+  const response = await marketplace.mintNFT(signer, "thisistesttokenuri", "thisistestmetadatauri", 5)
+  console.log(response)
+}
+
+const testNFTSale = async () => {
+  const response = await marketplace.createSale(signer, 4, 1)
+  console.log(response)
+}
+
+const testNFTAuction = async () => {
+  const response = await marketplace.createAuction(signer, 5, 1, 300)
+  console.log(response)
+}
+
+const testNFTHistory = async () => {
+  const response = await marketplace.loadHistory(provider, 1,)
+  console.log(response)
+}
 
   return (
     <div className="App">
@@ -39,8 +58,10 @@ const testFetchAllNfts = async () => {
         <h1> MARKET APP TESTING </h1>
         <button onClick={testFetchMyNfts}> Fetch My NFTs</button><br></br>
         <button onClick={testFetchAllNfts}> Fetch All NFTs</button><br></br>
-        <button> Set NFT to Sale</button><br></br>
-        <button> Set NFT to Auction</button><br></br>
+        <button onClick={testMintNFT}> Mint New NFT</button><br></br>
+        <button onClick={testNFTSale}> Set NFT to Sale</button><br></br>
+        <button onClick={testNFTAuction}> Set NFT to Auction</button><br></br>
+        <button onClick={testNFTHistory}> Load NFT Ownership History</button><br></br>
       </header>
     </div>
   );
