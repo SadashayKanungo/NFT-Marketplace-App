@@ -20,42 +20,31 @@ export async function getProvider() {
 
 }
 
+const parseItem = async (i) => {
+  console.log("parsing", i);
+  const [tokenId, tokenUri, seller, sellingPrice, forSale] = i
+  //const meta = await axios.get(tokenUri)
+  let item = {
+    tokenId: tokenId.toNumber(),
+    seller: seller,
+    price : ethers.utils.formatEther(sellingPrice._hex.toString()),
+    //owner: i.owner, Not returned by smart contract
+    //image: meta.data.image,
+    tokenUri
+  }
+  return item
+}
+
 export const marketplace = {
   loadMyNFTs: async function (provider) {
     const marketContract = new ethers.Contract(nftmarketaddress, MarketAbi, provider)
-    const tokenContract = new ethers.Contract(nftaddress, NFTAbi, provider)
     
-    const SaleData = await marketContract.fetchMySalesItems({from : provider.getAddress()})
-    const SaleItems = await Promise.all(SaleData.map(async i => {
-      const tokenUri = await tokenContract.tokenURI(i.tokenId)
-      //const meta = await axios.get(tokenUri)
-      let price = ethers.utils.formatEther(i.sellingPrice._hex.toString())
-      let item = {
-        price,
-        tokenId: i.tokenId.toNumber(),
-        seller: i.seller,
-        //owner: i.owner, Not returned by smart contract
-        //image: meta.data.image,
-        tokenUri
-      }
-      return item
-    }))
+    const SaleData = await marketContract.fetchMySalesItems()
+    const SaleItems = await Promise.all(SaleData.map(async i => {const parsed = await parseItem(i); return parsed;}))
 
-    const AuctionData = await marketContract.fetchMyAuctionsItems({from : provider.getAddress()})
-    const AuctionItems = await Promise.all(AuctionData.map(async i => {
-      const tokenUri = await tokenContract.tokenURI(i.tokenId)
-      //const meta = await axios.get(tokenUri)
-      let price = ethers.utils.formatEther(i.sellingPrice._hex.toString())
-      let item = {
-        price,
-        tokenId: i.tokenId.toNumber(),
-        seller: i.seller,
-        //owner: i.owner, Not returned by smart contract
-        //image: meta.data.image,
-        tokenUri
-      }
-      return item
-    }))
+    const AuctionData = await marketContract.fetchMyAuctionsItems()
+    const AuctionItems = await Promise.all(AuctionData.map(async i => {const parsed = await parseItem(i); return parsed;}))
+
     const items = SaleItems.concat(AuctionItems)
     console.log("fetched", items);
     return items;
@@ -63,43 +52,13 @@ export const marketplace = {
 
   loadAllNFTs: async function (provider) {
     const marketContract = new ethers.Contract(nftmarketaddress, MarketAbi, provider)
-    const tokenContract = new ethers.Contract(nftaddress, NFTAbi, provider)
 
     const SaleData = await marketContract.fetchSalesItems()
-    console.log("data", SaleData);
-    const SaleItems = await Promise.all(SaleData.map(async i => {
-      const tokenUri = await tokenContract.tokenURI(i.tokenId)
-      //const meta = await axios.get(tokenUri)
-      console.log("price", i.sellingPrice._hex.toString());
-
-      let price = ethers.utils.formatEther(i.sellingPrice._hex.toString())
-      let item = {
-        price,
-        tokenId: i.tokenId.toNumber(),
-        seller: i.seller,
-        //owner: i.owner, Not returned by smart contract
-        //image: meta.data.image,
-        tokenUri
-      }
-      return item
-    }))
-    console.log("saleitems", SaleItems);
+    const SaleItems = await Promise.all(SaleData.map(async i => {const parsed = await parseItem(i); return parsed;}))
 
     const AuctionData = await marketContract.fetchAuctionsItems()
-    const AuctionItems = await Promise.all(AuctionData.map(async i => {
-      const tokenUri = await tokenContract.tokenURI(i.tokenId)
-      //const meta = await axios.get(tokenUri)
-      let price = ethers.utils.formatEther(i.sellingPrice._hex.toString())
-      let item = {
-        price,
-        tokenId: i.tokenId.toNumber(),
-        seller: i.seller,
-        //owner: i.owner, Not returned by smart contract
-        //image: meta.data.image,
-        tokenUri
-      }
-      return item
-    }))
+    const AuctionItems = await Promise.all(AuctionData.map(async i => {const parsed = await parseItem(i); return parsed;}))
+
     const items = SaleItems.concat(AuctionItems)
     console.log("fetched", items);
     return items;

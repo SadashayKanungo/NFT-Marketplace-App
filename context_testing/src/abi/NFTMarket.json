@@ -293,12 +293,47 @@
 				"type": "uint256"
 			}
 		],
-		"name": "auctionTokenIds",
+		"name": "auctionItems",
 		"outputs": [
 			{
 				"internalType": "uint256",
-				"name": "",
+				"name": "tokenId",
 				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "tokenUri",
+				"type": "string"
+			},
+			{
+				"internalType": "address",
+				"name": "seller",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "startingPrice",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "expiresAt",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "currentBidPrice",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "currentBidder",
+				"type": "address"
+			},
+			{
+				"internalType": "bool",
+				"name": "onAuction",
+				"type": "bool"
 			}
 		],
 		"stateMutability": "view",
@@ -310,6 +345,16 @@
 		"outputs": [
 			{
 				"components": [
+					{
+						"internalType": "uint256",
+						"name": "tokenId",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "tokenUri",
+						"type": "string"
+					},
 					{
 						"internalType": "address",
 						"name": "seller",
@@ -356,6 +401,16 @@
 			{
 				"components": [
 					{
+						"internalType": "uint256",
+						"name": "tokenId",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "tokenUri",
+						"type": "string"
+					},
+					{
 						"internalType": "address",
 						"name": "seller",
 						"type": "address"
@@ -401,6 +456,16 @@
 			{
 				"components": [
 					{
+						"internalType": "uint256",
+						"name": "tokenId",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "tokenUri",
+						"type": "string"
+					},
+					{
 						"internalType": "address",
 						"name": "seller",
 						"type": "address"
@@ -430,6 +495,16 @@
 		"outputs": [
 			{
 				"components": [
+					{
+						"internalType": "uint256",
+						"name": "tokenId",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "tokenUri",
+						"type": "string"
+					},
 					{
 						"internalType": "address",
 						"name": "seller",
@@ -501,12 +576,32 @@
 				"type": "uint256"
 			}
 		],
-		"name": "saleTokenIds",
+		"name": "saleItems",
 		"outputs": [
 			{
 				"internalType": "uint256",
-				"name": "",
+				"name": "tokenId",
 				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "tokenUri",
+				"type": "string"
+			},
+			{
+				"internalType": "address",
+				"name": "seller",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "sellingPrice",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "onSale",
+				"type": "bool"
 			}
 		],
 		"stateMutability": "view",
@@ -522,6 +617,16 @@
 		],
 		"name": "TokenAuctions",
 		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "tokenUri",
+				"type": "string"
+			},
 			{
 				"internalType": "address",
 				"name": "seller",
@@ -566,6 +671,16 @@
 		],
 		"name": "TokenSales",
 		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "tokenUri",
+				"type": "string"
+			},
 			{
 				"internalType": "address",
 				"name": "seller",

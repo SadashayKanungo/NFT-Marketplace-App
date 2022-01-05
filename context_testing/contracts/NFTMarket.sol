@@ -32,6 +32,8 @@ contract NFTMarket is Ownable {
 
     //Auction details
     struct Auction {
+        uint256 tokenId;
+        string tokenUri;
         address seller;
         uint256 startingPrice;
         uint256 expiresAt; //auction expiry date.
@@ -41,8 +43,11 @@ contract NFTMarket is Ownable {
         //bool royaltySupport; //royalty support 
     }
 
+
     //Sale Details
     struct Sale {
+        uint256 tokenId;
+        string tokenUri;
         address seller;
         uint256 sellingPrice;
         bool onSale;
@@ -51,8 +56,8 @@ contract NFTMarket is Ownable {
 
     mapping(uint256 => Sale) public TokenSales; //tokenIdToSell
     mapping(uint256 => Auction) public TokenAuctions; // tokenIdToAuction
-    uint256[] public saleTokenIds; //Sales token for sales
-    uint256[] public auctionTokenIds; //Auction token for sales
+    Sale[] public saleItems; //Sales token for sales
+    Auction[] public auctionItems; //Auction token for sales
 
     ///@param _nftContract Contract Address of NFT
     ///@dev sets deployer as marketplace owner and init minimum bid percent to 2.5%
@@ -117,14 +122,26 @@ contract NFTMarket is Ownable {
             "MarketPlace: Minter need to approve marketplace as its token operator"
         );
 
+        string memory _tokenUri = nftContract.tokenURI(_tokenId);
+
+        //set nft id for sale
+        saleItems.push( Sale({
+            tokenId: _tokenId,
+            tokenUri: _tokenUri,
+            seller: msg.sender,
+            sellingPrice: _sellingPrice,
+            onSale: true 
+            //royaltySupport: _royaltySupport
+        }));
+
         TokenSales[_tokenId] = Sale({
+            tokenId: _tokenId,
+            tokenUri: _tokenUri,
             seller: msg.sender,
             sellingPrice: _sellingPrice,
             onSale: true 
             //royaltySupport: _royaltySupport
         });
-        //set nft id for sale
-        saleTokenIds.push(_tokenId);
 
         emit SaleCreated(_tokenId, _sellingPrice);
     }
@@ -164,7 +181,25 @@ contract NFTMarket is Ownable {
             "MarketPlace: Minter need to approve marketplace as its token operator"
         );
 
+        string memory _tokenUri = nftContract.tokenURI(_tokenId);
+
+        
+        //set nft to auction
+        auctionItems.push( Auction({
+            tokenId: _tokenId,
+            tokenUri: _tokenUri,
+            seller: msg.sender,
+            startingPrice: _startingPrice,
+            expiresAt: _expiresAt,
+            currentBidPrice: 0,
+            currentBidder: address(0),
+            onAuction: true
+            //royaltySupport: _royaltySupport
+        }));
+
         TokenAuctions[_tokenId] = Auction({
+            tokenId: _tokenId,
+            tokenUri: _tokenUri,
             seller: msg.sender,
             startingPrice: _startingPrice,
             expiresAt: _expiresAt,
@@ -173,8 +208,6 @@ contract NFTMarket is Ownable {
             onAuction: true
             //royaltySupport: _royaltySupport
         });
-        //set nft to auction
-        auctionTokenIds.push(_tokenId);
 
         emit AuctionCreated(_tokenId, _startingPrice);
     }
@@ -366,10 +399,10 @@ contract NFTMarket is Ownable {
     }
 
     function removeNftIdFromSale(uint256 _tokenId) internal{
-        for(uint256 i=0; i<saleTokenIds.length; i++){
-            if(saleTokenIds[i] ==_tokenId){
-                saleTokenIds[i] = saleTokenIds[saleTokenIds.length-1];
-                saleTokenIds.pop();
+        for(uint256 i=0; i<saleItems.length; i++){
+            if(saleItems[i].tokenId ==_tokenId){
+                saleItems[i] = saleItems[saleItems.length-1];
+                saleItems.pop();
                 return;
             }
             
@@ -377,10 +410,10 @@ contract NFTMarket is Ownable {
     }
 
     function removeNftIdFromAuction(uint256 _tokenId) internal{
-        for(uint256 i=0; i<auctionTokenIds.length; i++){
-            if(auctionTokenIds[i] ==_tokenId){
-                auctionTokenIds[i] = auctionTokenIds[auctionTokenIds.length-1];
-                auctionTokenIds.pop();
+        for(uint256 i=0; i<auctionItems.length; i++){
+            if(auctionItems[i].tokenId ==_tokenId){
+                auctionItems[i] = auctionItems[auctionItems.length-1];
+                auctionItems.pop();
                 return;
             }
         }
@@ -426,22 +459,24 @@ contract NFTMarket is Ownable {
     //fetchers
     // sales
     function fetchSalesItems() public view returns (Sale[] memory){
-        Sale[] memory sales = new Sale[](saleTokenIds.length);
-        for(uint256 i=0;i<saleTokenIds.length;i++){
-            Sale storage sale = TokenSales[saleTokenIds[i]];
-            sales[i] = sale;
-        }
-        return sales;
+        return saleItems;
     }
 
     function fetchMySalesItems() public view returns (Sale[] memory){
-        Sale[] memory sales = new Sale[](saleTokenIds.length);
-        uint256 saleCounter = 0;
-        for(uint256 i=0;i<saleTokenIds.length;i++){
-            Sale storage sale = TokenSales[saleTokenIds[i]];
+        uint256 myNos = 0;
+        for(uint256 i=0;i<saleItems.length;i++){
+            Sale memory sale = saleItems[i];
             if(sale.seller == msg.sender){
-                sales[saleCounter] = sale;
-                saleCounter += 1;
+                myNos++;
+            }
+        }
+
+        Sale[] memory sales = new Sale[](myNos);
+        for(uint256 i=0;i<saleItems.length;i++){
+            Sale memory sale = saleItems[i];
+            if(sale.seller == msg.sender){
+                myNos--;
+                sales[myNos] = sale;
             }
         }
         return sales;
@@ -450,22 +485,24 @@ contract NFTMarket is Ownable {
 
     //auctions
     function fetchAuctionsItems() public view returns(Auction[] memory){
-        Auction[] memory auctions = new Auction[](auctionTokenIds.length);
-        for(uint256 i=0;i<auctionTokenIds.length;i++){
-            Auction storage auction = TokenAuctions[auctionTokenIds[i]];
-            auctions[i]=auction;
-        }
-        return auctions;
+        return auctionItems;
     }
 
     function fetchMyAuctionsItems() public view returns(Auction[]  memory){
-        Auction[] memory auctions = new Auction[](auctionTokenIds.length);
-        uint256 auctionCounter = 0;
-        for(uint256 i=0;i<auctionTokenIds.length;i++){
-            Auction memory auction = TokenAuctions[auctionTokenIds[i]];
+        uint256 myNos = 0;
+        for(uint256 i=0;i<saleItems.length;i++){
+            Sale memory sale = saleItems[i];
+            if(sale.seller == msg.sender){
+                myNos++;
+            }
+        }
+        
+        Auction[] memory auctions = new Auction[](myNos);
+        for(uint256 i=0;i<auctionItems.length;i++){
+            Auction memory auction = auctionItems[i];
             if(auction.seller == msg.sender){
-                auctions[auctionCounter]=auction;
-                auctionCounter += 1;
+                myNos--;
+                auctions[myNos] = auction;
             }
         }
         return auctions;
