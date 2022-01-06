@@ -39,6 +39,8 @@ contract NFTMarket is Ownable {
         uint256 expiresAt; //auction expiry date.
         uint256 currentBidPrice; //Current max bidding price
         address currentBidder; //Current max bidder
+        uint256[] bidPrices; //Array of all bid prices in sequence
+        address[] bidders; //Array of all bidders in sequence
         bool onAuction;
         //bool royaltySupport; //royalty support 
     }
@@ -193,6 +195,8 @@ contract NFTMarket is Ownable {
             expiresAt: _expiresAt,
             currentBidPrice: 0,
             currentBidder: address(0),
+            bidPrices: new uint256[](0),
+            bidders: new address[](0),
             onAuction: true
             //royaltySupport: _royaltySupport
         }));
@@ -205,6 +209,8 @@ contract NFTMarket is Ownable {
             expiresAt: _expiresAt,
             currentBidPrice: 0,
             currentBidder: address(0),
+            bidPrices: new uint256[](0),
+            bidders: new address[](0),
             onAuction: true
             //royaltySupport: _royaltySupport
         });
@@ -249,6 +255,20 @@ contract NFTMarket is Ownable {
         //update
         act.currentBidPrice = _tokenAmount;
         act.currentBidder = msg.sender;
+
+        act.bidPrices.push(_tokenAmount);
+        act.bidders.push(msg.sender);
+
+        for(uint256 i=0; i<auctionItems.length; i++){
+            if(auctionItems[i].tokenId == _tokenId){
+                auctionItems[i].currentBidPrice = _tokenAmount;
+                auctionItems[i].currentBidder = msg.sender;
+                auctionItems[i].bidPrices.push(_tokenAmount);
+                auctionItems[i].bidders.push(msg.sender);
+                break;
+            }
+            continue;
+        }
 
         emit BidCreated(_tokenId, msg.sender, _tokenAmount);
     }

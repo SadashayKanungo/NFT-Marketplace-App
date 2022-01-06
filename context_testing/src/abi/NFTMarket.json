@@ -387,6 +387,16 @@
 						"type": "address"
 					},
 					{
+						"internalType": "uint256[]",
+						"name": "bidPrices",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "address[]",
+						"name": "bidders",
+						"type": "address[]"
+					},
+					{
 						"internalType": "bool",
 						"name": "onAuction",
 						"type": "bool"
@@ -440,6 +450,16 @@
 						"internalType": "address",
 						"name": "currentBidder",
 						"type": "address"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "bidPrices",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "address[]",
+						"name": "bidders",
+						"type": "address[]"
 					},
 					{
 						"internalType": "bool",
