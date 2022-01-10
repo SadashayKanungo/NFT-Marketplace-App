@@ -20,5 +20,13 @@ module.exports = {
       accounts:[process.env.ADMIN_WALLET_PRIVATE_KEY]
     }
   },
-  solidity: "0.8.4",
+  solidity: {
+    version: "0.8.4",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 1000,
+      },
+    }
+  }
 };

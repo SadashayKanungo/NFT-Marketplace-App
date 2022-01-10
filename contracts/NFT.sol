@@ -11,6 +11,12 @@ contract NFT is ERC721URIStorage {
     Counters.Counter private _tokenIds; // tracks the token ids
     event TokenMinted(address owner, uint256 tokenId);
 
+    // Stores Ownership history Data
+    struct HistoryItem{
+        address owner;
+        uint256 value;
+    }
+
     /// Stores token Meta Data
     struct TokenExtraInfo {
         address minter;
@@ -22,6 +28,10 @@ contract NFT is ERC721URIStorage {
     mapping(uint256 => TokenExtraInfo) public TokenExtraInfos;
     //  mapping for token URIs
     mapping(uint256 => string) private _tokenURIs;
+    // mapping for Ownership history
+    mapping(uint256 => HistoryItem[]) public TokenHistory;
+    // mapping for NFT balance
+    mapping(address => uint256[]) public TokenBalance;
 
 
     constructor() ERC721("GameItem", "ITM") {}
@@ -54,11 +64,27 @@ contract NFT is ERC721URIStorage {
         uint256 newItemId = _tokenIds.current();
         _mint(_owner, newItemId);
         _setTokenURI(newItemId, _tokenDataURI);
+        
+        _tokenURIs[newItemId] = _tokenDataURI;
+        TokenBalance[_owner].push(newItemId);
 
         emit TokenMinted(_owner, newItemId);
         return newItemId;
     }
 
+
+    function addOwner( uint256 _tokenId, address _owner, uint256 _value) public returns (HistoryItem[] memory) {
+        HistoryItem memory newOwner = HistoryItem({
+            owner: _owner,
+            value: _value
+        });
+        TokenHistory[_tokenId].push(newOwner);
+        return TokenHistory[_tokenId];
+    }
+
+    function getHistory(uint256 _tokenId) public view returns (HistoryItem[] memory) {
+        return TokenHistory[_tokenId];
+    }
 
     ///@notice gives the original minter of token
     ///@param _tokenId Id of token
@@ -79,6 +105,15 @@ contract NFT is ERC721URIStorage {
     ///@return string of metadata uri
     function getMetaDataURI(uint256 _tokenId) public view returns (string memory) {
         return TokenExtraInfos[_tokenId].metaDataURI;
+    }
+
+    function getMyNfts() public view returns(string[] memory){
+        uint256[] storage ids = TokenBalance[msg.sender];
+        string[] memory uris = new string[](ids.length);
+        for(uint256 i=0; i<ids.length; i++){
+            uris[i] = _tokenURIs[ids[i]];
+        }
+        return uris;
     }
 
     function _burn(uint256 tokenId) internal virtual override {
