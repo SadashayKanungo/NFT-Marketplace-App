@@ -39,10 +39,14 @@ contract NFTMarket is Ownable {
         uint256 expiresAt; //auction expiry date.
         uint256 currentBidPrice; //Current max bidding price
         address currentBidder; //Current max bidder
-        uint256[] bidPrices; //Array of all bid prices in sequence
-        address[] bidders; //Array of all bidders in sequence
+        // uint256[] bidPrices; //Array of all bid prices in sequence
+        // address[] bidders; //Array of all bidders in sequence
         bool onAuction;
         //bool royaltySupport; //royalty support 
+    }
+    struct Bid{
+        address bidder;
+        uint256 bidPrice;
     }
 
 
@@ -56,10 +60,20 @@ contract NFTMarket is Ownable {
         //bool royaltySupport; //royalty support 
     }
 
+    struct Item{
+        uint256 tokenId;
+        string tokenUri;
+        address seller;
+        uint256 price;
+        string itemType;
+    }
+
     mapping(uint256 => Sale) public TokenSales; //tokenIdToSell
     mapping(uint256 => Auction) public TokenAuctions; // tokenIdToAuction
+    mapping(uint256 => Bid[]) public AuctionBids; // Bids for an auction stored by tokenId
     Sale[] public saleItems; //Sales token for sales
     Auction[] public auctionItems; //Auction token for sales
+    Item[] public allItems; //All tokens on auction or sale
 
     ///@param _nftContract Contract Address of NFT
     ///@dev sets deployer as marketplace owner and init minimum bid percent to 2.5%
@@ -94,6 +108,12 @@ contract NFTMarket is Ownable {
     ///@param _account address of marketplace owner to  be set
     function setMarketPlaceOwner(address _account) public onlyOwner{
         marketPlaceOwner = payable(_account);
+    }
+
+    function getPosition(uint256 _tokenId) public view returns (string memory){
+        if(TokenSales[_tokenId].onSale) return "SALE";
+        else if(TokenAuctions[_tokenId].onAuction) return "AUCTION";
+        else return "NONE";
     }
 
 
@@ -145,6 +165,14 @@ contract NFTMarket is Ownable {
             //royaltySupport: _royaltySupport
         });
 
+        allItems.push( Item({
+            tokenId: _tokenId,
+            tokenUri: _tokenUri,
+            seller: msg.sender,
+            price: _sellingPrice,
+            itemType: "SALE"
+        }));
+
         emit SaleCreated(_tokenId, _sellingPrice);
     }
 
@@ -195,8 +223,8 @@ contract NFTMarket is Ownable {
             expiresAt: _expiresAt,
             currentBidPrice: 0,
             currentBidder: address(0),
-            bidPrices: new uint256[](0),
-            bidders: new address[](0),
+            // bidPrices: new uint256[](0),
+            // bidders: new address[](0),
             onAuction: true
             //royaltySupport: _royaltySupport
         }));
@@ -209,11 +237,19 @@ contract NFTMarket is Ownable {
             expiresAt: _expiresAt,
             currentBidPrice: 0,
             currentBidder: address(0),
-            bidPrices: new uint256[](0),
-            bidders: new address[](0),
+            // bidPrices: new uint256[](0),
+            // bidders: new address[](0),
             onAuction: true
             //royaltySupport: _royaltySupport
         });
+
+        allItems.push( Item({
+            tokenId: _tokenId,
+            tokenUri: _tokenUri,
+            seller: msg.sender,
+            price: 0,
+            itemType: "AUCTION"
+        }));
 
         emit AuctionCreated(_tokenId, _startingPrice);
     }
@@ -258,13 +294,25 @@ contract NFTMarket is Ownable {
 
         // act.bidPrices.push(_tokenAmount);
         // act.bidders.push(msg.sender);
+        AuctionBids[_tokenId].push(Bid({
+            bidder: msg.sender,
+            bidPrice: _tokenAmount
+        }));
 
         for(uint256 i=0; i<auctionItems.length; i++){
             if(auctionItems[i].tokenId == _tokenId){
                 auctionItems[i].currentBidPrice = _tokenAmount;
                 auctionItems[i].currentBidder = msg.sender;
-                auctionItems[i].bidPrices.push(_tokenAmount);
-                auctionItems[i].bidders.push(msg.sender);
+                // auctionItems[i].bidPrices.push(_tokenAmount);
+                // auctionItems[i].bidders.push(msg.sender);
+                break;
+            }
+            continue;
+        }
+
+        for(uint256 i=0; i<allItems.length; i++){
+            if(allItems[i].tokenId == _tokenId){
+                allItems[i].price = _tokenAmount;
                 break;
             }
             continue;
@@ -341,7 +389,7 @@ contract NFTMarket is Ownable {
         nftContract.transferFrom(tokenOwner, msg.sender, _tokenId);
 
         // adding new owner to nft's history
-        nftContract.addOwner(_tokenId, msg.sender, act.currentBidPrice);
+        nftContract.addOwner(_tokenId, tokenOwner, msg.sender, act.currentBidPrice);
 
         act.currentBidPrice = 0;
         //transfer marketplace commision 
@@ -391,7 +439,7 @@ contract NFTMarket is Ownable {
         nftContract.transferFrom(tokenOwner, msg.sender, _tokenId);
 
         // adding new owner to nft's history
-        nftContract.addOwner(_tokenId, msg.sender, sale.sellingPrice);
+        nftContract.addOwner(_tokenId, tokenOwner, msg.sender, sale.sellingPrice);
         
         sale.sellingPrice = 0;
         //transfer marketplace owner commissions
@@ -435,6 +483,14 @@ contract NFTMarket is Ownable {
             }
             
         }
+        for(uint256 i=0; i<allItems.length; i++){
+            if(allItems[i].tokenId ==_tokenId){
+                allItems[i] = allItems[allItems.length-1];
+                allItems.pop();
+                return;
+            }
+            
+        }
     }
 
     function removeNftIdFromAuction(uint256 _tokenId) internal{
@@ -444,6 +500,14 @@ contract NFTMarket is Ownable {
                 auctionItems.pop();
                 return;
             }
+        }
+        for(uint256 i=0; i<allItems.length; i++){
+            if(allItems[i].tokenId ==_tokenId){
+                allItems[i] = allItems[allItems.length-1];
+                allItems.pop();
+                return;
+            }
+            
         }
     }
 
@@ -485,9 +549,123 @@ contract NFTMarket is Ownable {
     }
 
     //fetchers
+
+    //All Items
+    function allItemNos() public view returns(uint256){
+        return allItems.length;
+    }
+    function fetchAllItems() public view returns (Item[] memory){
+        return allItems;
+    }
+    // Overriding above function to use pagination
+    // One page has maximum of 10 items. Page numbers start form 0.
+    function fetchAllItems(uint256 _pageIndex) public view returns (Item[] memory){
+        uint256 start = _pageIndex*10;
+        require(start <= allItems.length, "Page Index out of range");
+
+        uint256 length = allItems.length-start < 10 ? allItems.length-start : 10;
+        Item[] memory page = new Item[](length);
+        for(uint256 i=0; i<length; i++){
+            page[i] = allItems[start+i];
+        }
+        return page;
+    }
+
+    // function MyAllItemsNos() public view returns (uint256) {
+    //     uint256 myNos = 0;
+    //     for(uint256 i=0;i<allItems.length;i++){
+    //         Item memory item = allItems[i];
+    //         if(item.seller == msg.sender){
+    //             myNos++;
+    //         }
+    //     }
+    //     return myNos;
+    // }
+
+    // function fetchMyAllItems() public view returns (Item[] memory){
+    //     uint256 myNos = 0;
+    //     for(uint256 i=0;i<allItems.length;i++){
+    //         Item memory item = allItems[i];
+    //         if(item.seller == msg.sender){
+    //             myNos++;
+    //         }
+    //     }
+
+    //     Item[] memory items = new Item[](myNos);
+    //     for(uint256 i=0;i<allItems.length;i++){
+    //         Item memory item = allItems[i];
+    //         if(item.seller == msg.sender){
+    //             myNos--;
+    //             items[myNos] = item;
+    //         }
+    //     }
+    //     return items;
+    // }
+
+    // // Overriding above function to use pagination
+    // // One page has maximum of 10 items. Page numbers start form 0.
+    // function fetchMyAllItems(uint256 _pageIndex) public view returns (Item[] memory){
+    //     uint256 myNos = 0;
+    //     for(uint256 i=0;i<allItems.length;i++){
+    //         Item memory item = allItems[i];
+    //         if(item.seller == msg.sender){
+    //             myNos++;
+    //         }
+    //     }
+
+    //     Item[] memory items = new Item[](myNos);
+    //     for(uint256 i=0;i<allItems.length;i++){
+    //         Item memory item = allItems[i];
+    //         if(item.seller == msg.sender){
+    //             myNos--;
+    //             items[myNos] = item;
+    //         }
+    //     }
+
+    //     uint256 start = _pageIndex*10;
+    //     require(start <= items.length, "Page Index out of range");
+
+    //     uint256 length = items.length-start < 10 ? items.length-start : 10;
+    //     Item[] memory page = new Item[](length);
+    //     for(uint256 i=0; i<length; i++){
+    //         page[i] = items[start+i];
+    //     }
+    //     return page;
+    // }
+
     // sales
+    function fetchSaleItem(uint256 _tokenId) public view returns (Sale memory) {
+        return TokenSales[_tokenId];
+    }
+    function saleItemNos() public view returns (uint256) {
+        return saleItems.length;
+    }
     function fetchSalesItems() public view returns (Sale[] memory){
         return saleItems;
+    }
+    // Overriding above function to use pagination
+    // One page has maximum of 10 items. Page numbers start form 0.
+    function fetchSalesItems(uint256 _pageIndex) public view returns (Sale[] memory){
+        uint256 start = _pageIndex*10;
+        require(start <= saleItems.length, "Page Index out of range");
+
+        uint256 length = saleItems.length-start < 10 ? saleItems.length-start : 10;
+        Sale[] memory page = new Sale[](length);
+        for(uint256 i=0; i<length; i++){
+            page[i] = saleItems[start+i];
+        }
+        return page;
+    }
+
+    function MySalesItemsNos() public view returns (uint256) {
+        uint256 myNos = 0;
+        for(uint256 i=0;i<saleItems.length;i++){
+            Sale memory sale = saleItems[i];
+            if(sale.seller == msg.sender){
+                myNos++;
+            }
+        }
+        return myNos;
     }
 
     function fetchMySalesItems() public view returns (Sale[] memory){
@@ -510,10 +688,73 @@ contract NFTMarket is Ownable {
         return sales;
     }
 
+    // Overriding above function to use pagination
+    // One page has maximum of 10 items. Page numbers start form 0.
+    function fetchMySalesItems(uint256 _pageIndex) public view returns (Sale[] memory){
+        uint256 myNos = 0;
+        for(uint256 i=0;i<saleItems.length;i++){
+            Sale memory sale = saleItems[i];
+            if(sale.seller == msg.sender){
+                myNos++;
+            }
+        }
+
+        Sale[] memory sales = new Sale[](myNos);
+        for(uint256 i=0;i<saleItems.length;i++){
+            Sale memory sale = saleItems[i];
+            if(sale.seller == msg.sender){
+                myNos--;
+                sales[myNos] = sale;
+            }
+        }
+
+        uint256 start = _pageIndex*10;
+        require(start <= sales.length, "Page Index out of range");
+
+        uint256 length = sales.length-start < 10 ? sales.length-start : 10;
+        Sale[] memory page = new Sale[](length);
+        for(uint256 i=0; i<length; i++){
+            page[i] = sales[start+i];
+        }
+        return page;
+    }
+
 
     //auctions
+    function fetchAuctionItem(uint256 _tokenId) public view returns(Auction memory){
+        return TokenAuctions[_tokenId];
+    }
+    function AuctionItemNos() public view returns (uint256) {
+        return auctionItems.length;
+    }
+
     function fetchAuctionsItems() public view returns(Auction[] memory){
         return auctionItems;
+    }
+    // Overriding above function to use pagination
+    // One page has maximum of 10 items. Page numbers start form 0.
+    function fetchAuctionsItems(uint256 _pageIndex) public view returns (Auction[] memory){
+        uint256 start = _pageIndex*10;
+        require(start <= auctionItems.length, "Page Index out of range");
+
+        uint256 length = auctionItems.length-start < 10 ? auctionItems.length-start : 10;
+        Auction[] memory page = new Auction[](length);
+        for(uint256 i=0; i<length; i++){
+            page[i] = auctionItems[start+i];
+        }
+        return page;
+    }
+
+
+    function MyAuctionsItemsNos() public view returns (uint256) {
+        uint256 myNos = 0;
+        for(uint256 i=0;i<auctionItems.length;i++){
+            Auction memory auction = auctionItems[i];
+            if(auction.seller == msg.sender){
+                myNos++;
+            }
+        }
+        return myNos;
     }
 
     function fetchMyAuctionsItems() public view returns(Auction[]  memory){
@@ -534,5 +775,65 @@ contract NFTMarket is Ownable {
             }
         }
         return auctions;
+    }
+    // Overriding above function to use pagination
+    // One page has maximum of 10 items. Page numbers start form 0.
+    function fetchMyAuctionsItems(uint256 _pageIndex) public view returns(Auction[]  memory){
+        uint256 myNos = 0;
+        for(uint256 i=0;i<auctionItems.length;i++){
+            Auction memory auction = auctionItems[i];
+            if(auction.seller == msg.sender){
+                myNos++;
+            }
+        }
+        
+        Auction[] memory auctions = new Auction[](myNos);
+        for(uint256 i=0;i<auctionItems.length;i++){
+            Auction memory auction = auctionItems[i];
+            if(auction.seller == msg.sender){
+                myNos--;
+                auctions[myNos] = auction;
+            }
+        }
+
+        uint256 start = _pageIndex*10;
+        require(start <= auctions.length, "Page Index out of range");
+
+        uint256 length = auctions.length-start < 10 ? auctions.length-start : 10;
+        Auction[] memory page = new Auction[](length);
+        for(uint256 i=0; i<length; i++){
+            page[i] = auctions[start+i];
+        }
+        return page;
+    }
+
+    //Bids
+    modifier IsOnAuction(uint256 _tokenId) {
+        require(
+            TokenAuctions[_tokenId].onAuction,
+            "MarketPlace: Item is not on Auction"
+        );
+        _;
+    }
+
+    function BidNos(uint256 _tokenId) public view IsOnAuction(_tokenId) returns (uint256) {
+        return AuctionBids[_tokenId].length;
+    } 
+    function getBids(uint256 _tokenId) public view IsOnAuction(_tokenId) returns (Bid[] memory) {
+        return AuctionBids[_tokenId];
+    }
+    // Overloading previous function to use pagination
+    // One page has maximum of 10 items. Page numbers start form 0.
+    function getBids(uint256 _tokenId, uint256 _pageIndex) public view IsOnAuction(_tokenId) returns (Bid[] memory) {
+        Bid[] storage bids = AuctionBids[_tokenId];
+        uint256 start = _pageIndex*10;
+        require(start <= bids.length, "Page Index out of range");
+
+        uint256 length = bids.length-start < 10 ? bids.length-start : 10;
+        Bid[] memory page = new Bid[](length);
+        for(uint256 i=0; i<length; i++){
+            page[i] = bids[start+i];
+        }
+        return page;
     }
 }

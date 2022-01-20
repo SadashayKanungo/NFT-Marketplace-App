@@ -4,9 +4,16 @@ pragma solidity ^0.8.3;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
+import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
-contract NFT is ERC721URIStorage {
+contract NFT is ERC721URIStorage, EIP712, Ownable{
     using Counters for Counters.Counter;
+    using ECDSA for bytes32;
+    using Strings for uint256;
 
     Counters.Counter private _tokenIds; // tracks the token ids
     event TokenMinted(address owner, uint256 tokenId);
@@ -32,9 +39,16 @@ contract NFT is ERC721URIStorage {
     mapping(uint256 => HistoryItem[]) public TokenHistory;
     // mapping for NFT balance
     mapping(address => uint256[]) public TokenBalance;
+    //claimed bitmask
+    mapping(uint256 => uint256) public nftClaimBitMask;
+
+    //token metadata signer
+    //address SIGNER = address(0xE86cc8E0fd53B912Dac2Ad68986Cee3e3A7B8d02);
+    address SIGNER = address(0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199);
 
 
-    constructor() ERC721("GameItem", "ITM") {}
+    constructor() ERC721("GameItem", "ITM")
+        EIP712("NFT", "1.0.0"){}
 
     ///@notice Mints new token with given details
     ///@dev Mints new token if caller has minter role
@@ -73,17 +87,44 @@ contract NFT is ERC721URIStorage {
     }
 
 
-    function addOwner( uint256 _tokenId, address _owner, uint256 _value) public returns (HistoryItem[] memory) {
+    function addOwner( uint256 _tokenId, address _from, address _to, uint256 _value) public returns (HistoryItem[] memory) {
+        uint256[] storage fromBal = TokenBalance[_from];
+        for(uint256 index = 0; index<fromBal.length; index++){
+            if(fromBal[index] == _tokenId){
+                fromBal[index] = fromBal[fromBal.length-1];
+                fromBal.pop();
+            }
+        }
+        TokenBalance[_from] = fromBal;
+        TokenBalance[_to].push(_tokenId);
+        
         HistoryItem memory newOwner = HistoryItem({
-            owner: _owner,
+            owner: _to, 
             value: _value
         });
         TokenHistory[_tokenId].push(newOwner);
         return TokenHistory[_tokenId];
     }
 
+    function HistoryNos(uint256 _tokenId) public view returns (uint256) {
+        return TokenHistory[_tokenId].length;
+    } 
     function getHistory(uint256 _tokenId) public view returns (HistoryItem[] memory) {
         return TokenHistory[_tokenId];
+    }
+    // Overloading previous function to use pagination
+    // One page has maximum of 10 items. Page numbers start form 0.
+    function getHistory(uint256 _tokenId, uint256 _pageIndex) public view returns (HistoryItem[] memory) {
+        HistoryItem[] storage history = TokenHistory[_tokenId];
+        uint256 start = _pageIndex*10;
+        require(start <= history.length, "Page Index out of range");
+
+        uint256 length = history.length-start < 10 ? history.length-start : 10;
+        HistoryItem[] memory historyPage = new HistoryItem[](length);
+        for(uint256 i=0; i<length; i++){
+            historyPage[i] = history[start+i];
+        }
+        return historyPage;
     }
 
     ///@notice gives the original minter of token
@@ -115,6 +156,21 @@ contract NFT is ERC721URIStorage {
         }
         return uris;
     }
+    // Overloading previous function to use pagination
+    // One page has maximum of 10 items. Page numbers start form 0. 
+    function getMyNfts(uint256 _pageIndex) public view returns(string[] memory){
+        uint256[] storage ids = TokenBalance[msg.sender];
+        uint256 start = _pageIndex*10;
+        require(start <= ids.length, "Page Index out of range");
+
+        uint256 length = ids.length-start < 10 ? ids.length-start : 10;
+        string[] memory uris = new string[](length);
+        for(uint256 i=0; i<length; i++){
+            uris[i] = _tokenURIs[ids[start+i]];
+        }
+        return uris;
+    }
+    
 
     function _burn(uint256 tokenId) internal virtual override {
         super._burn(tokenId);
@@ -123,4 +179,67 @@ contract NFT is ERC721URIStorage {
             delete _tokenURIs[tokenId];
         }
     }
+
+    ///@notice user can claim the NFT 
+    ///@param _account account to be minted 
+    ///@param _nftIndex     nft index 
+    ///@param _tokenDataURI token data uri uri for token
+    ///@param _metaDataURI meta data uri for token 
+    ///@param _signature   signature provided by the conta
+   	function claimNFT(
+        address _account, 
+        uint256 _nftIndex,
+        string memory _tokenDataURI, 
+        string memory _metaDataURI, 
+        bytes calldata _signature
+    ) external {
+        require(!isClaimed(_nftIndex), "NFT: Token already claimed!");
+
+        require(_verify(_hash(_account, _nftIndex), _signature), "NFT: Invalid Claiming!");
+        _setClaimed(_nftIndex);
+        _tokenIds.increment();
+        TokenExtraInfos[_tokenIds.current()] = TokenExtraInfo({
+            minter: _account,
+            metaDataURI: _metaDataURI,
+            royaltyPercentage: 0
+        });
+
+        uint256 newItemId = _tokenIds.current();
+        _mint(_account, newItemId);
+        _setTokenURI(newItemId, _tokenDataURI);
+
+        emit TokenMinted(_account, newItemId);
+	}
+
+    //hash the data
+    function _hash(address _account, uint256 _nftIndex)
+    internal view returns (bytes32)
+    {
+        return _hashTypedDataV4(keccak256(abi.encode(
+            keccak256("NFT(address _account,uint256 _nftIndex)"),
+            _account,
+            _nftIndex
+        )));
+    }
+
+    //verify with signature
+    function _verify(bytes32 digest, bytes memory signature)
+    internal view returns (bool)
+    {
+        return SignatureChecker.isValidSignatureNow(SIGNER, digest, signature);
+    }
+
+    function isClaimed(uint256 _nftIndex) public view returns (bool) {
+        uint256 wordIndex = _nftIndex / 256;
+        uint256 bitIndex = _nftIndex % 256;
+        uint256 mask = 1 << bitIndex;
+        return nftClaimBitMask[wordIndex] & mask == mask;
+	  }
+
+    function _setClaimed(uint256 _nftIndex) internal{
+        uint256 wordIndex = _nftIndex / 256;
+        uint256 bitIndex = _nftIndex % 256;
+        uint256 mask = 1 << bitIndex;
+        nftClaimBitMask[wordIndex] |= mask;
+	  }
 }
